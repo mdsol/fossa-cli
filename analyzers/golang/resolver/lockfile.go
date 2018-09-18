@@ -30,7 +30,7 @@ const (
 func FromLockfile(tool Type, dir string) (Resolver, error) {
 	switch tool {
 	case Dep:
-		return dep.New(dir)
+		return dep.New(dir+"/Gopkg.lock", dir+"/Gopkg.toml")
 	case Gdm:
 		return gdm.New(dir)
 	case Glide:
