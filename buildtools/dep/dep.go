@@ -11,22 +11,21 @@ import (
 	"github.com/fossas/fossa-cli/pkg"
 )
 
-// A Resolver contains both the Lockfile and Manifest information. Resolver implements Resolver.
+// A Resolver contains both the Lockfile and Manifest information. Resolver implements golang.Resolver.
 type Resolver struct {
 	Manifest Manifest
 	Lockfile Lockfile
 }
 
-// Manifest contains the contents of a dep toml file. Manifest implements Resolver.
-// Ignored is a result of toml unmarshalling. IgnoreMap is for easy search of ignored packages
+// Manifest contains the ignored packages in a dep toml file. Manifest implements golang.Resolver.
 type Manifest struct {
 	Ignored []string
 }
 
-// A Lockfile contains the contents of a dep lockfile. Lockfiles are resolvers.
+// A Lockfile contains the Projects in a dep lockfile and a corresponding map for retrieving project data.
 type Lockfile struct {
 	Projects   []Project
-	Normalized map[string]pkg.Import // A Normalized map of package import paths to revisions.
+	Normalized map[string]pkg.Import
 }
 
 // A Project is a single imported repository within a dep project.
@@ -37,22 +36,28 @@ type Project struct {
 	Version  string
 }
 
-// Resolve determines if the Gopkg.toml dep file has any rules that apply
+// Resolve returns the revision of an imported Go package contained within the
+// lockfile and checks to see if it should be ignored. If the package cannot be
+// ignored and is not found, buildtools.ErrNoRevisionForPackage is returned.
 func (r Resolver) Resolve(importpath string) (pkg.Import, error) {
 	if r.Manifest.IsIgnored(importpath) {
 		return pkg.Import{}, buildtools.ErrPackageIsIgnored
 	}
 
-	return r.Lockfile.Resolve(importpath)
+	revision, ok := r.Lockfile.Normalized[importpath]
+	if !ok {
+		return pkg.Import{}, buildtools.ErrNoRevisionForPackage
+	}
+
+	return revision, nil
 }
 
-// IsIgnored finds packages to ignore while handling the possibility of a wildcard
+// IsIgnored checks if a Go package can be ignored according to a dep manifest.
 func (m Manifest) IsIgnored(importpath string) bool {
-
 	for _, ignoredPackage := range m.Ignored {
 		if strings.HasSuffix(ignoredPackage, "*") {
-			ignoredWildcard := ignoredPackage[:len(ignoredPackage)-1]
-			if strings.HasPrefix(importpath, ignoredWildcard) {
+			ignoredPrefix := ignoredPackage[:len(ignoredPackage)-1]
+			if strings.HasPrefix(importpath, ignoredPrefix) {
 				return true
 			}
 		}
@@ -63,17 +68,6 @@ func (m Manifest) IsIgnored(importpath string) bool {
 	}
 
 	return false
-}
-
-// Resolve returns the revision of an imported Go package contained within the
-// lockfile. If the package is not found, buildtools.ErrNoRevisionForPackage is
-// returned.
-func (l Lockfile) Resolve(importpath string) (pkg.Import, error) {
-	rev, ok := l.Normalized[importpath]
-	if !ok {
-		return pkg.Import{}, buildtools.ErrNoRevisionForPackage
-	}
-	return rev, nil
 }
 
 // New constructs a golang.Resolver
@@ -91,8 +85,21 @@ func New(lockfilePath string, manifestPath string) (Resolver, error) {
 		return Resolver{}, err
 	}
 
+	return resolver, nil
+}
+
+// ReadLockFile creates and returns a Lockfile object using the provided filepath
+func ReadLockfile(filepath string) (Lockfile, error) {
+	var lockfile Lockfile
+
+	err := files.ReadTOML(&lockfile, filepath)
+	fmt.Println(err)
+	if err != nil {
+		return Lockfile{}, fmt.Errorf("No lockfile Gopkg.lock found: %+v", err)
+	}
+
 	normalized := make(map[string]pkg.Import)
-	for _, project := range resolver.Lockfile.Projects {
+	for _, project := range lockfile.Projects {
 		for _, pk := range project.Packages {
 			importpath := path.Join(project.Name, pk)
 			normalized[importpath] = pkg.Import{
@@ -107,22 +114,11 @@ func New(lockfilePath string, manifestPath string) (Resolver, error) {
 		}
 	}
 
-	resolver.Lockfile.Normalized = normalized
-	return resolver, nil
-}
-
-// ReadLockFile accepts the filepath of a lockfile which it parses into a lockfile object
-func ReadLockfile(filepath string) (Lockfile, error) {
-	var lockfile Lockfile
-
-	err := files.ReadTOML(&lockfile, filepath)
-	if err != nil {
-		return Lockfile{}, fmt.Errorf("No lockfile Gopkg.lock found: %+v", err)
-	}
+	lockfile.Normalized = normalized
 	return lockfile, nil
 }
 
-// ReadManifest accepts the filepath of a manifest which it parses into a manifest object
+// ReadManifest crestes and returns a Manifest object using the provided filepath
 func ReadManifest(filepath string) (Manifest, error) {
 	var manifest Manifest
 	err := files.ReadTOML(&manifest, filepath)
