@@ -2,7 +2,6 @@
 package dep
 
 import (
-	"errors"
 	"fmt"
 	"path"
 	"strings"
@@ -27,7 +26,7 @@ type Manifest struct {
 // A Lockfile contains the contents of a dep lockfile. Lockfiles are resolvers.
 type Lockfile struct {
 	Projects   []Project
-	normalized map[string]pkg.Import // A normalized map of package import paths to revisions.
+	Normalized map[string]pkg.Import // A Normalized map of package import paths to revisions.
 }
 
 // A Project is a single imported repository within a dep project.
@@ -70,7 +69,7 @@ func (m Manifest) IsIgnored(importpath string) bool {
 // lockfile. If the package is not found, buildtools.ErrNoRevisionForPackage is
 // returned.
 func (l Lockfile) Resolve(importpath string) (pkg.Import, error) {
-	rev, ok := l.normalized[importpath]
+	rev, ok := l.Normalized[importpath]
 	if !ok {
 		return pkg.Import{}, buildtools.ErrNoRevisionForPackage
 	}
@@ -108,7 +107,7 @@ func New(lockfilePath string, manifestPath string) (Resolver, error) {
 		}
 	}
 
-	resolver.Lockfile.normalized = normalized
+	resolver.Lockfile.Normalized = normalized
 	return resolver, nil
 }
 
@@ -118,7 +117,7 @@ func ReadLockfile(filepath string) (Lockfile, error) {
 
 	err := files.ReadTOML(&lockfile, filepath)
 	if err != nil {
-		return Lockfile{}, errors.New(fmt.Sprintf("No lockfile Gopkg.lock found: %+v", err))
+		return Lockfile{}, fmt.Errorf("No lockfile Gopkg.lock found: %+v", err)
 	}
 	return lockfile, nil
 }
@@ -128,7 +127,7 @@ func ReadManifest(filepath string) (Manifest, error) {
 	var manifest Manifest
 	err := files.ReadTOML(&manifest, filepath)
 	if err != nil {
-		return Manifest{}, errors.New(fmt.Sprintf("No manifest Gopkg.toml found: %+v", err))
+		return Manifest{}, fmt.Errorf("No manifest Gopkg.toml found: %+v", err)
 	}
 
 	return manifest, nil
