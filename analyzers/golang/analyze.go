@@ -54,9 +54,7 @@ func (a *Analyzer) Analyze() (graph.Deps, error) {
 		if a.Options.LockfilePath == "" {
 			return graph.Deps{}, errors.New("manifest strategy specified without lockfile path")
 		}
-
-		r, err = glide.New(a.Options.LockfilePath)
-		// r, err = glide.FromFile(a.Options.LockfilePath)
+		r, err = glide.New(a.Options.LockfilePath, a.Options.ManifestPath)
 		if err != nil {
 			return graph.Deps{}, err
 		}
@@ -64,7 +62,7 @@ func (a *Analyzer) Analyze() (graph.Deps, error) {
 		if a.Options.LockfilePath == "" {
 			return graph.Deps{}, errors.New("manifest strategy specified without lockfile path")
 		}
-		r, err = godep.FromFile(a.Options.LockfilePath)
+		r, err = godep.New(a.Options.LockfilePath)
 		if err != nil {
 			return graph.Deps{}, err
 		}
